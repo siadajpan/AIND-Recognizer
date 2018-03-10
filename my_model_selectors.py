@@ -76,9 +76,32 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
-
+        max_score = float("-Inf")
+        best_model = self.base_model
+        
+        for n in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                test_model = self.base_model(n)
+                
+                # calculate log-likelihood for our word
+                logL = test_model.score(self.X, self.lengths)
+                
+                # calculate free parameters for this model
+                data_points = sum(self.lengths)
+                free_parameters = n ** 2 + 2 * n * data_points - 1
+                
+                # use BIC = -2 * logL + p * logN
+                score = -2 * logL + free_parameters * math.log(data_points)
+            
+                if score > max_score:
+                    max_score = score
+                    best_model = test_model
+            
+            except:
+                pass
+            
+        return best_model
+            
 
 class SelectorDIC(ModelSelector):
     ''' select best model based on Discriminative Information Criterion
@@ -92,9 +115,38 @@ class SelectorDIC(ModelSelector):
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        
+        # create matrix with X and lengths for all other words
+        other_Xlengths = [self.hwords[word] for word in self.words 
+                                            if word != self.this_word]
+        
+        max_score = float("-Inf")
+        best_model = None
+        
+        
+        for n in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                # initialize model
+                test_model = self.base_model(n)
+                
+                # get likelihood of this_word
+                logL = test_model.score(self.X, self.lengths)
+                
+                # create array of log-likelihood of other words
+                other_logLs = [test_model.score(X, length) for X, length in other_Xlengths]
+                
+                # use DIC = log(P(X(i)) - 1/(M-1)SUM(log(P(X(all but i))
+                score = logL - np.mean(other_logLs)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+                if score > max_score:
+                    max_score = score
+                    best_model = test_model
+                
+            except:
+                pass
+            
+        return best_model
+
 
 
 class SelectorCV(ModelSelector):
@@ -104,6 +156,34 @@ class SelectorCV(ModelSelector):
 
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
+        
+        min_score = float("Inf")
+        # kf = KFold(n_splits = 3, shuffle = False, random_state = None)
+        split_method = KFold(n_splits = 2)
+        best_model = None
+        
+        for n in range(self.min_n_components, self.max_n_components + 1):
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+            logLs = []
+            try:
+                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                    
+                    # write new X and lengths to Model Selector class
+                    self.X, self.lengths = combine_sequences(cv_train_idx, self.sequences)
+                    
+                    # create new model based on X and lengths
+                    test_model = self.base_model(n)
+                    X, lengths = combine_sequences(cv_test_idx, self.sequences)
+                    logLs.append(test_model.score(X, lengths))
+                        
+                score = np.mean(logLs)
+                
+                # update score
+                if score < min_score:
+                    min_score = score
+                    best_model = test_model
+                    
+            except:
+               pass
+           
+        return best_model
