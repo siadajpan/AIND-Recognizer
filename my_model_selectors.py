@@ -76,7 +76,7 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        max_score = float("-Inf")
+        min_score = float("Inf")
         best_model = self.base_model
         
         for n in range(self.min_n_components, self.max_n_components + 1):
@@ -87,14 +87,15 @@ class SelectorBIC(ModelSelector):
                 logL = test_model.score(self.X, self.lengths)
                 
                 # calculate free parameters for this model
-                data_points = sum(self.lengths)
-                free_parameters = n ** 2 + 2 * n * data_points - 1
+                n_features = len(self.X[0])
+                p = n ** 2 + 2 * n * n_features - 1
                 
                 # use BIC = -2 * logL + p * logN
-                score = -2 * logL + free_parameters * math.log(data_points)
+                data_points = sum(self.lengths)
+                score = -2 * logL + p * math.log(data_points)
             
-                if score > max_score:
-                    max_score = score
+                if score < min_score:
+                    min_score = score
                     best_model = test_model
             
             except:
@@ -157,7 +158,7 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         
-        min_score = float("Inf")
+        max_score = float("-Inf")
         # kf = KFold(n_splits = 3, shuffle = False, random_state = None)
         split_method = KFold(n_splits = 2)
         best_model = None
@@ -179,8 +180,8 @@ class SelectorCV(ModelSelector):
                 score = np.mean(logLs)
                 
                 # update score
-                if score < min_score:
-                    min_score = score
+                if score > max_score:
+                    max_score = score
                     best_model = test_model
                     
             except:
